@@ -1,5 +1,5 @@
 # main.py
-# This version is designed for web hosting platforms like Railway.
+# This version is optimized for hosting on Render and local testing.
 
 import asyncio
 import os
@@ -22,7 +22,6 @@ import config
 import handlers as h
 
 # --- Bot and Web Server Setup ---
-# Use DictPersistence for in-memory storage, as servers have ephemeral filesystems.
 persistence = DictPersistence()
 
 application = (
@@ -32,13 +31,12 @@ application = (
     .build()
 )
 
-# Create a FastAPI web server instance
-app = FastAPI(docs_url=None, redoc_url=None) # Disabling docs for security
+app = FastAPI(docs_url=None, redoc_url=None)
 
 # --- Main Bot Logic ---
 async def main_setup() -> None:
     """Initializes the bot and its handlers."""
-    # Conversation Handler for Setup
+    # ... (ConversationHandler and other handlers remain unchanged)
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", h.start)],
         states={
@@ -50,8 +48,6 @@ async def main_setup() -> None:
         persistent=False,
         name="setup_conversation"
     )
-
-    # Add all handlers to the application
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("help", h.help_command))
     application.add_handler(CommandHandler("myinfo", h.myinfo_command))
@@ -62,12 +58,18 @@ async def main_setup() -> None:
 
     # Initialize the application
     await application.initialize()
-    # Start the background tasks
     await application.start()
 
-    # Set the webhook using the environment variable provided by Railway
-    webhook_url = f"https://{os.getenv('RAILWAY_STATIC_URL')}/webhook"
-    await application.bot.set_webhook(url=webhook_url)
+    # --- MODIFIED WEBHOOK LOGIC FOR RENDER ---
+    # Prioritize Render's public URL, fall back to a local ngrok URL
+    webhook_base_url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("LOCAL_WEBHOOK_URL")
+
+    if webhook_base_url:
+        webhook_url = f"{webhook_base_url}/webhook"
+        await application.bot.set_webhook(url=webhook_url)
+        config.logger.info(f"Webhook set successfully to {webhook_url}")
+    else:
+        config.logger.warning("Webhook URL not found. Set RENDER_EXTERNAL_URL on the server or LOCAL_WEBHOOK_URL in .env for local testing.")
 
 # --- Webhook Endpoint ---
 @app.post("/webhook")
